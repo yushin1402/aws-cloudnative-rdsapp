@@ -44,12 +44,10 @@
             <ul class="navbar-nav" >
                 <li class="nav-item">
                     <a class="nav-link" href="#1">1.RDS準備</a>
-                    <a class="nav-link" href="#2">2.プロジェクト作成</a>
-                    <a class="nav-link" href="#3">3.backend実装</a>
-                    <a class="nav-link" href="#4">4.bff実装</a>
-                    <a class="nav-link" href="#5">5.view実装</a>
-                    <a class="nav-link" href="#6">6.DockerHubへのプッシュ</a>
-                    <a class="nav-link" href="#7">7.ECSクラスタ作成</a>
+                    <a class="nav-link" href="#2">2.RDSログイン用IAMユーザ作成</a>
+                    <a class="nav-link" href="#3">3.プロジェクト作成</a>
+                    <a class="nav-link" href="#4">4.RDS接続のアーキテクチャ</a>
+                    <a class="nav-link" href="#5">5.アプリ実装</a>
                 </li>
             </ul>
         </div>
@@ -165,7 +163,7 @@
                 </li>
             </ol>
         </p>
-        <h1 id="2">2.プロジェクト作成</h1>
+        <h1 id="3">3.プロジェクト作成</h1>
         <p>
             RDSに接続するアプリケーションのプロジェクトを作成する。ライブラリにはSpringDATAJPAとSpringCloudAWSを利用する。
         </p>
@@ -176,7 +174,7 @@
                 <li>ダウンロードしたZIPファイルをフォルダに展開する。</li>
                 <li>展開したフォルダ上で<code>mvn spring-boot:run</code>を実行し、ビルドが成功することを確認する。</li>
                 <li>STSに既存Mavenプロジェクトとしてインポートする。</li>
-                <li>pom.xmlに必要なライブラリを追記する。必要なライブラリは以下。</li>
+                <li>pom.xmlに必要なライブラリを追記する。必要なライブラリは以下。(一部がInitializrで追記済み)</li>
                 <br>
                 <pre><code>
         &lt;dependencies&gt;
@@ -236,7 +234,7 @@
                 <li>以下コマンドを実行</li>
                 <pre><code>
         git init
-        echo "# Study CloudNative Webapp" >> README.md
+        echo "# Study CloudNative RDSapp" >> README.md
         git add .
         git commit -m "first commit"
         git remote add origin git@github.com:yushin1402/aws-cloudnative-webapp.git
@@ -245,876 +243,216 @@
                 <li>docsフォルダをGitHub Pagesで公開する。</li>
             </ol>
         </p>
+        <h1 id="4">4.RDS接続のアーキテクチャ</h1>
+        <p>以下サイトを参照</p>
+        <a href src="https://news.mynavi.jp/techplus/article/techp4426/">https://news.mynavi.jp/techplus/article/techp4426/</a>
 
+        <h1 id="5">5.RDSテーブル作成</h1>
+        <p>テーブル構成は以下サイトを参照</p>
+        <a href src="https://news.mynavi.jp/techplus/article/techp4426/">https://news.mynavi.jp/techplus/article/techp4426/</a>
+        <p>DDL実行手順は以下の通り。</p>
+        <ol>
+            <li>踏み台EC2のアウトバウンドと踏み台EC2からのインバウンドについて5432ポートを事前に許可する。</li>
+            <li>踏み台のEC2にpostgresクライアントをインストールする。</li>
+            <code>sudo yum install -y postgresql</code>
+            <li>踏み台EC2からRDSのPostgresqlに、マスターユーザでログインする。</li>
+            <code>psql -U XXXXX -h XXXXXX.ap-northeast-1.rds.amazonaws.com</code>
+            <br>
+            -hに指定している接続先は、RDSサービス画面のエンドポイント設定で確認できる。AWS内部のDNS名なので内部IPアドレスが返される。(インターネット越しのアクセス不可。)
+            <li><code>\l</code>でデータベースの一覧を確認する。</li>
+            <li>データベースを作成する。</li>
+            <code>create database ma_saitoumsv_sanple_db;</code>
+            <li>作成したデータベースに接続する。</li>
+            <code>\c ma_saitoumsv_sample_db</code>
+            <li>テーブル作成のDDLが記載されたSQLファイルを取得する。</li>
+            SSHで接続している場合は、踏み台サーバにSCPで転送すればOK。今回はセッションマネージャを利用していたため、S3にアップロードし、以下コマンドで取得した。
+            <br>
+            <code>aws s3 cp s3://XXXXX/initddl.sql /tmp/</code>
+            <br>
+            なお、セッションマネージャを利用してSSHを行う方法があるので、後日設定する。これを行うと、セキュリティグループでSSHを許可することなく、サーバにSSH接続可能となる。
+            <li>postgresにログインした状態で以下コマンドでSQL実行</li>
+            <code>\i /tmp/initddl.sql</code>
+            <li><code>\dt</code>でテーブルを確認する。</li>
+        </ol>
 
-
-        <h1 id="3">3.backend実装</h1>
+        <h1 id="5">5.アプリ実装</h1>
         <p>
-            「/api/v1/users」でリクエストを受け付け、ユーザのリストを返却するアプリケーションを実装する。
-        </p>
-        <p>
-            <ol>
-                <li>パッケージを作成する。</li>
-                <table class="table">
-                    <tr>
-                        <th>パッケージ名</th>
-                        <th>説明</th>
-                    </tr>
-                    <tr>
-                        <td>com.example.backend.app.model</td>
-                        <td>Modelクラスを配置する。</td>
-                    </tr>
-                    <tr>
-                        <td>com.example.backend.app.web</td>
-                        <td>Controllerクラスを配置する。</td>
-                    </tr>
-                    <tr>
-                        <td>com.example.backend.config</td>
-                        <td>アプリケーション設定を定義したクラスを配置する。</td>
-                    </tr>
-                </table>
-                <li>Modelクラスの実装</li>
-                ユーザ情報を定義するクラスを実装する。
-                <br>
-                <pre><code>
-        package com.example.backend.app.model;
-
-        import lombok.AllArgsConstructor;
-        import lombok.Builder;
-        import lombok.Data;
-        import lombok.NoArgsConstructor;
-        
-        @AllArgsConstructor
-        @NoArgsConstructor
-        @Builder
-        @Data
-        
-        public class User {
-            
-            private String userId;
-            private String userName;
-        
-        }                                                  
-                </code></pre>
-                <br>
-                Lombokを利用してSpringBoot起動時にコードの自動生成を行っている。
-                <table class="table">
-                    <tr>
-                        <th>ポイント</th>
-                        <th>説明</th>
-                    </tr>
-                    <tr>
-                        <td><code>@AllArgsConstructor</code></td>
-                        <td>
-                            全てのプロパティ(<code>userId</code>と<code>userName</code></code>
-                            を引数にしたコンストラクタを自動生成する。
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><code>@NoArgsConstructor</code></td>
-                        <td>
-                            引数なしのコンストラクタを自動生成する。
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><code>@Builder</code></td>
-                        <td>
-                            Builderクラスを自動生成する。Builderを利用することで、メソッドチェーンで値を設定できる。
-                            この後実装するContoroller側での呼び出し方を見るとイメージがつく。<br>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><code>@Data</code></td>
-                        <td>
-                            getterやsetterなどを自動生成する。
-                        </td>
-                    </tr>
-                </table>
-                <li>Contorollerクラスの実装</li>
-                Userオブジェクトを返却するAPIを作成する。
-                <br>
-                <pre><code>
-        package com.example.backend.app.web;
-
-        import java.util.ArrayList;
-        import java.util.List;
-        
-        import org.springframework.web.bind.annotation.GetMapping;
-        import org.springframework.web.bind.annotation.RequestMapping;
-        import org.springframework.web.bind.annotation.RestController;
-        
-        import com.example.backend.app.model.User;
-        
-        @RestController
-        @RequestMapping("/api/v1")
-        public class BackendRestController {
-        
-            @GetMapping("/users")
-            public List<User> getUsers(){
-                List<User> users = new ArrayList<>();
-                users.add(User.builder().userId("1").userName("Taro").build());
-                users.add(User.builder().userId("2").userName("Jiro").build());
-                return users;
-            }
-        
-        }                                                                           
-                </code></pre>
-                <br>
-                「/api/v1/users」でリクエストに対して、Userオブジェクトを返却している。
-                <table class="table">
-                    <tr>
-                        <th>ポイント</th>
-                        <th>説明</th>
-                    </tr>
-                    <tr>
-                        <td><code>@RestController</code></td>
-                        <td>
-                            RestfulAPIを作成する際に利用するアノテーション。
-                            戻り値をJSONオブジェクトへの変換を行っている。<br>
-                            (<code>@Controller</code>とすればViewが返却される。)
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><code>@RequestMapping("/api/v1")</code></td>
-                        <td>
-                            メソッドと「/api/v1」URLのマッピング定義をしている。
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><code>@Builder</code></td>
-                        <td>
-                            Builderクラスを自動生成する。Builderを利用することで、メソッドチェーンで値を設定できる。
-                            この後実装するContoroller側での呼び出し方を見るとイメージがつく。<br>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><code>User.builder()</code></td>
-                        <td>
-                            Userクラスの<code>@Builder</code>で定義したBuilderメソッドを呼び出している。
-                            Userクラスのプロパティをメソッドチェーンで呼び出し、値を設定している。
-                        </td>
-                    </tr>
-                </table>
-                <li>SpringBoot起動クラスの実装</li>
-                SpringBootを起動する際に呼び出す起動クラスを実装する。
-                このクラスはSpringBootプロジェクトを作成した際にデフォルトでトップパッケージに存在するが、
-                分かりやすさの観点で、com.example.backend.config配下に作成する。
-                <br>
-                <pre><code>
-        package com.example.backend.config;
-
-        import org.springframework.boot.SpringApplication;
-        import org.springframework.boot.autoconfigure.SpringBootApplication;
-        import org.springframework.context.annotation.ComponentScan;
-        
-        @SpringBootApplication
-        public class BackendApplication {
-        
-            public static void main(String[] args) {
-                SpringApplication.run(BackendApplication.class, args);
-            }
-        
-        }                                                                        
-                </code></pre>
-                <table class="table">
-                    <tr>
-                        <th>ポイント</th>
-                        <th>説明</th>
-                    </tr>
-                    <tr>
-                        <td><code>@SpringBootApplication</code></td>
-                        <td>
-                            SpringBootの起動クラスであることを宣言するアノテーション。
-                            com.example.backend.config配下に<br>
-                            <code>@SpringBootApplication</code>を宣言することで、
-                            コンポーネントスキャンの対象がcom.example.backend.config以下の階層に限定される。<br>
-                            従って、com.example.backend.app配下のクラスで
-                            Bean定義を行ってもDIコンテナにBean登録されないため注意すること。<br>
-                            デフォルトのプロジェクトではトップパッケージに<code>@SpringBootApplication</code>
-                            が配置されているため、<br>
-                            全てのクラスでBean定義が可能だが管理が煩雑になるため、com.example.backend.configに<br>
-                            Bean定義を行うクラスをまとめて管理する方針としている。
-                        </td>
-                    </tr>
-                </table>
-                <li>WebMVC設定クラスの実装</li>
-                backendアプリケーションをWebMVCとして動作させるための設定クラスを実装する。
-                <br>
-                <pre><code>
-        package com.example.backend.config;
-        
-        import org.springframework.context.annotation.ComponentScan;
-        import org.springframework.context.annotation.Configuration;
-        import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-        
-        @Configuration
-        @ComponentScan("com.example.backend.app.web")
-        
-        public class MvcConfig implements WebMvcConfigurer {
-        
-        }                                                                              
-                </code></pre>
-                <table class="table">
-                    <tr>
-                        <th>ポイント</th>
-                        <th>説明</th>
-                    </tr>
-                    <tr>
-                        <td>com.example.backend.configへの配置</td>
-                        <td>
-                            このパッケージに配置することでSpringBoot起動時の起動クラス(BackendApplication)によるコンポーネントスキャン対象となる。
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><code>@Configuration</code></td>
-                        <td>
-                            このアノテーションによりConfigurationクラスであることを宣言する。サンプルコードからは読み取りづらいが、
-                            クラス内にインスタンスを返す<code>@Bean</code>を付与したメソッドを定義すると、Bean定義を行うことが出来る。
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>
-                          <code>@ComponentScan("com.example.backend.app.web")</code>
-                        </td>                       
-                        <td>
-                            引数を指定することで特定のパッケージやクラスをDIすることが出来る。com.example.backend.app.webをDIし、SpringBoot起動時にControllerの
-                            <code>@RestContoroller</code>や<code>GetMapping</code>メソッドをDIし、APIの受け口を作成している。
-                            DIされたインスタンスは、<code>WebMvcConfigurer</code>のdefaultメソッドで利用されていると思慮。
-                        </td>
-                    </tr>
-                </table>
-                <li>application.ymlの設定</li>
-                バックエンドアプリケーションのコンテキストはこのファイルで設定する。
-                <br>
-                <pre><code>
-        server:
-            servlet:
-              context-path: /backend                  
-                </code></pre>
-            </ol>
-        </p>
-        <h1 id="4">4.bff実装</h1>
-        <p>
-            index.htmlのボタンを押下し、APIを呼び出すBFFを作成する。
-        </p>
-        <p>
-            <ol>
-                <li>パッケージを作成する。(backendと同様の構成)</li>
-                <table class="table">
-                    <tr>
-                        <th>パッケージ名</th>
-                        <th>説明</th>
-                    </tr>
-                    <tr>
-                        <td>com.example.backend-for-frontend.app.model</td>
-                        <td>Modelクラスを配置する。</td>
-                    </tr>
-                    <tr>
-                        <td>com.example.backend-for-frontend.app.web</td>
-                        <td>Controllerクラスを配置する。</td>
-                    </tr>
-                    <tr>
-                        <td>com.example.backend.config</td>
-                        <td>アプリケーション設定を定義したクラスを配置する。</td>
-                    </tr>
-                </table>
-                <li>Modelクラスの実装</li>
-                ユーザ情報を定義するクラスを実装する。backendからのレスポンスを格納するため、backendと同じ実装で問題ない。
-                <li>Contorollerクラスの実装</li>
-                この後実装するindex.htmlからの呼び出しに応じてbackendのAPIを呼び出し、レスポンスをmodelに格納してViewに返却する。
-                <br>
-                <pre><code>
-        package com.example.backendforfrontend.app.web;
-
-        import org.springframework.beans.factory.annotation.Autowired;
-        import org.springframework.stereotype.Controller;
-        import org.springframework.ui.Model;
-        import org.springframework.web.bind.annotation.RequestMapping;
-        import org.springframework.web.bind.annotation.RequestMethod;
-        import org.springframework.web.client.RestOperations;
-        
-        import com.example.backendforfrontend.app.model.User;
-        
-        @Controller
-        public class BackendForFrontendController {
-        
-            @Autowired
-            RestOperations restOperations;
-        
-            @RequestMapping(method = RequestMethod.GET, value="users")
-            public String getUsers(Model model) {
-                String service = "/backend/api/v1/users";
-                model.addAttribute("users",
-                        restOperations.getForObject(service, User[].class));
-                return "users";
-            }
-        }
-                </code></pre>
-                <table class="table">
-                    <tr>
-                        <th>ポイント</th>
-                        <th>説明</th>
-                    </tr>
-                    <tr>
-                        <td><code>RestOperations restOperations</code></td>
-                        <td>
-                            org.springframework.web.client.RestOperationsでbackendのAPIを呼び出している。<br>
-                            DTOとレスポンスのバインドをよしなにやってくれるため、便利なライブラリとのこと。<br>
-                            上記のソースでは、backendがUserオブジェクトをJSONで返却しているが、このキー値と<br>
-                            <code>User.class</code>のプロパティを自動でマッピングし、格納している。
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><code>@RequestMapping(method = RequestMethod.GET, value = "users")/code></td>
-                        <td>
-                            BFFの「/users」に対するGETリクエストを受け付けるとこのアノテーションを付与したメソッドが実行される。<br>
-                            なお、先頭の"/"は省略可能ならしい。
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>
-                          <code>Model model</code>
-                        </td>                       
-                        <td>
-                            <code>RequestMapping</code>の引数に設定された<code>Model model</code>はレスポンスとして<br>
-                            View(=TymeLeaf)に返却されるので、addAttributeしておくと、View側で返却結果を画面に反映出来る。<br>
-                            <code>return "users"</code>がTymeLeaf側でレスポンスを取得する際のキーとなる。                        
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>
-                          <code>String service = "/backend/api/v1/users";</code>
-                        </td>                       
-                        <td>
-                            <code>String service</code>にbackendのURLを定義しているが、ホスト部はあえて記載していない。<br>
-                            実環境ではホスト部はALBのDNS名となり、環境差分である。このため、application.ymlと<code>@ConfigurationProperty</code><br>
-                            を駆使することで、プレフィックス定義として外だしする。
-                        </td>
-                    </tr>
-                </table> 
-                <li>application.ymlの設定</li>
-                変数<code>service</code>にプロパティを定義する。
-                <br>
-                <pre><code>
-        service:
-          dns: http://internal-MA-saitoumsv-private-alb-1666952727.ap-northeast-1.elb.amazonaws.com
-                </code></pre>               
-                <li>ServicePropertiesクラスの実装</li>
-                applicaion.ymlに定義したプロパティを取得するメソッドを実装する。
-                <br>
-                <pre><code>
-        package com.example.backendforfrontend.app.web;
-
-        import org.springframework.boot.context.properties.ConfigurationProperties;
-        import org.springframework.stereotype.Component;
-        
-        @Component
-        @ConfigurationProperties(prefix="service")
-        public class ServiceProperties {
-            
-            private String dns;
-        
-        }                                                                                         
-                </code></pre>
-                <table class="table">
-                    <tr>
-                        <th>ポイント</th>
-                        <th>説明</th>
-                    </tr>
-                    <tr>
-                        <td><code>@Component</code></td>
-                        <td>
-                            環境差分がある設定はDIコンテナにBean登録することで、変更が用意になる。(今回はapplication.ymlの変更だけで対応可能)
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><code>@ConfigurationProperties(prefix="service")</td>
-                        <td>
-                            このアノテーションを付与したプロパティには引数のprefixが定義される。(prefix以外も定義可能)
-                        </td>
-                    </tr>
-                </table> 
-                <li>MvcConfigクラスの実装</li>
-                ServicePropertyでserviceにプレフィックスを付与する方法をとったが、この場合、URL自体はContorollerごとに実装しなければならない。<br>
-                これを避けるために、SpringBoot起動時に<code>@Data</code>を付与したServicePropertiesをDIし、<br>
-                <code>dns</code>の値を<code>RestOperation</code>に渡し、<code>rootUri</code>に<code>dns</code>の値を格納して<code>RestOperations</code>を<br>
-                ビルドすることで、全てのURLを<code>ServicePropertis</code>にまとめて管理することができる。
-                <br>
-                <pre><code>
-        package com.example.backendforfrontend.config;
-
-        import org.springframework.beans.factory.annotation.Autowired;
-        import org.springframework.boot.web.client.RestTemplateBuilder;
-        import org.springframework.context.annotation.Bean;
-        import org.springframework.context.annotation.ComponentScan;
-        import org.springframework.context.annotation.Configuration;
-        import org.springframework.web.client.RestOperations;
-        import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-        
-        import com.example.backendforfrontend.app.web.ServiceProperties;
-        
-        @ComponentScan("com.example.backendforfrontend.app.web")
-        @Configuration
-        
-        public class MvcConfig implements WebMvcConfigurer {
-            @Autowired
-            ServiceProperties properties;
-            
-            @Bean
-            public RestOperations restOperations(RestTemplateBuilder restTemplateBuilder) {
-                return restTemplateBuilder.rootUri(properties.getDns()).build();
-            }
-        
-        }        
-                </code></pre>
-            </ol>
-        </p>
-        <h1 id="5">5.view実装</h1>
-        <p>
-            backendを呼び出すviewを実装する。viewにはThymeLeafを利用する。
-            <ol>
-                <li>index.htmlの実装</li>
-                本アプリのトップ画面を表示するindex.htmlを作成する。<br>
-                SpringBootにおいて、静的ファイルの格納パスは以下の通り定められている。
-                <table class="table">
-                    <tr>
-                        <th>検索順番</th>
-                        <th>格納パス</th>
-                    </tr>
-                    <tr>
-                        <td>1</td>
-                        <td>src/main/resources/META-INF/resources/</td>
-                    </tr>
-                    <tr>
-                        <td>2</td>
-                        <td>src/main/resources/</td>
-                    </tr>
-                    <tr>
-                        <td>3</td>
-                        <td>src/main/resources/static/</td>
-                    </tr>
-                    <tr>
-                        <td>4</td>
-                        <td>src/main/resources/public/</td>
-                    </tr>
-                </table>
-                <p>
-                    (※)各フォルダで同じ名前のHTMLファイルが存在する場合は、検索順番が
-                    最も低いファイル(一番最初に検索されたファイル)が返却される。
-                </p>
-
-                <p>
-                    src/main/resources/META-INF/resources/とsrc/main/resources/には設定ファイルも格納されているため、htmlファイルを格納するのは好ましくない。
-                    今回はresources/static配下にindex.htmlファイルを格納する。<br>
-                    index.htmlのコードは以下の通り。
-                </p>
-                <pre><code>
-        &lt;!DOCTYPE html&gt;
-        &lt;html lang="ja"&gt;
-        &lt;head&gt;
-            &lt;meta charset="utf-8"&gt;
-            &lt;meta http-equiv="X-UA-Compatible" content="IE=edge"&gt;
-            &lt;meta name="viewport" content="width=device-width, initial-scale=1"&gt;
-            &lt;title&gt;Index&lt;/title&gt;
-            &lt;link rel="stylesheet" href="static/css/flex.css" media="(min-width: 1280px)"&gt;
-            &lt;link rel="stylesheet" href="static/css/flex_mobile.css" media="(min-width: 320px) and (max-width: 767px)"&gt;
-            &lt;link rel="stylesheet" href="static/css/flex_tablet.css" media="(min-width: 768px) and (max-width: 1279px)"&gt;
-            &lt;link rel="stylesheet" href="static/css/index.css" media="(min-width: 1280px)"&gt;
-            &lt;link rel="stylesheet" href="static/css/index_mobile.css" media="(min-width: 320px) and (max-width: 767px)"&gt;
-            &lt;link rel="stylesheet" href="static/css/index_tablet.css" media="(min-width: 768px) and (max-width: 1279px)"&gt;
-            &lt;script type="text/javascript" src="webjars/jquery/jquery.js"&gt;&lt;/script&gt;        
-        &lt;/head&gt;
-        &lt;body&gt;
-        &lt;h1&gt;Hello! AWS ECS sample!&lt;/h1&gt;
-        &lt;h2&gt;Please call backend service.&lt;/h2&gt;
-        &lt;form id="form" action="users" method="get"&gt;
-            &lt;button id="confrim" name="confrim" class="main-button" type="submit" value="Submit"&gt;Call backend service&lt;/button&gt;
-        &lt;/form&gt;
-        &lt;/body&gt;
-        &lt;/html&gt;
-    </code></pre>
-        <br>
-        <table class="table">
-            <tr>
-                <th>ポイント</th>
-                <th>説明</th>
-            </tr>
-            <tr>
-                <td><code>action="users"</code></td>
-                <td>URLパス(相対パス)を表す。backedn-front-endのコントローラ定義と
-                    <br>合わせる必要がある。
-                </td>
-            </tr>
-            <tr>
-                <td><code>method="get"</code></td>
-                <td>
-                    form送信する際のメソッドを定義。backend-for-frontendコントローラ定義と
-                    <br>合わせる必要がある。
-                </td>
-            </tr>
-        </table>
-            <li>users.htmlの作成</li>
-            <p>
-                index.htmlからユーザ情報をフォーム送信したのち、backend-for-frontendとbackendにより処理された結果を
-                htmlとして、ブラウザに返却する。このhtml(users.html)を作成する。users.htmlには、backend-for-frontendの
-                返却オブジェクトを組み込むことで、ユーザ情報をページに反映する。
-            </p>
-            <pre><code>
-        &lt;!DOCTYPE HTML&gt;
-        &lt;html xmlns:th="http://www.thymeleaf.org" lang="ja"&gt;
-        &lt;head&gt;
-            &lt;title&gt;Hello! Thymeleaf&lt;/title&gt;
-            &lt;meta http-equiv="X-UA-Compatible" content="IE=edge"&gt;
-            &lt;meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /&gt;
-            &lt;meta name="viewport" content="width=device-width, initial-scale=1"&gt;
-            &lt;link rel="stylesheet" href="static/css/flex.css" media="(min-width: 1280px)"&gt;
-            &lt;link rel="stylesheet" href="static/css/flex_mobile.css" media="(min-width: 320px) and (max-width: 767px)"&gt;
-            &lt;link rel="stylesheet" href="static/css/flex_tablet.css" media="(min-width: 768px) and (max-width: 1279px)"&gt;
-            &lt;link rel="stylesheet" href="static/css/users.css" media="(min-width: 1280px)"&gt;
-            &lt;link rel="stylesheet" href="static/css/users_mobile.css" media="(min-width: 320px) and (max-width: 767px)"&gt;
-            &lt;link rel="stylesheet" href="static/css/users_tablet.css" media="(min-width: 768px) and (max-width: 1279px)"&gt;
-            &lt;script type="text/javascript" src="webjars/jquery/jquery.js"&gt;&lt;/script&gt;
-        &lt;/head&gt;
-        &lt;body&gt;
-        &lt;h1&gt;Hello! AWS ECS sample!&lt;/h1&gt;
-        &lt;table&gt;
-            &lt;thead&gt;
-            &lt;tr&gt;
-                &lt;th&gt;No&lt;/th&gt;
-                &lt;th&gt;User ID&lt;/th&gt;
-                &lt;th&gt;User Name&lt;/th&gt;
-            &lt;/tr&gt;
-            &lt;/thead&gt;
-            &lt;tbody&gt;
-            &lt;tr th:each="user, status : ${users}"&gt;
-                &lt;td th:text="${status.count}"&gt;&lt;/td&gt;
-                &lt;td th:text="${user.userId}"&gt;&lt;/td&gt;
-                &lt;td th:text="${user.userName}"&gt;&lt;/td&gt;
-            &lt;/tr&gt;
-            &lt;/tbody&gt;
-        &lt;/table&gt;
-        &lt;/body&gt;
-        &lt;/html&gt;
-            </code></pre>
+            環境が整ったため、アプリの実装を行う。
+            アプリの構成は以下の通り。
             <table class="table">
                 <tr>
-                    <th>ポイント</th>
+                    <th>コンポーネント</th>
                     <th>説明</th>
+                    <th>必須/任意</th>
                 </tr>
                 <tr>
-                    <td>配置場所</td>
-                    <td>
-                        backend-for-frontendが返却する戻り値を組み込んだhtmlは、SpringBootのビューテンプレートエンジンで生成する。
-                        このため、users.htmlはsrc/main/resources/templates配下に作成しなければならない。
-                    </td>
+                    <td>App</td>
+                    <td>SpringBootの起動クラス</td>
+                    <td>必須</td>
                 </tr>
                 <tr>
-                    <td><code>tr th:each="user, status : ${users}"</code></td>
+                    <td>DomainConfig</td>
+                    <td>サービスレイヤの設定を行うクラス。コンポーネントスキャンし、DIコンテナに登録する対象サービスを管理する。</td>
+                    <td>任意</td>
+                </tr>
+                <tr>
+                    <td>JpaConfig</td>
+                    <td>SpringDataJPAの接続を行うクラス。コンポーネントスキャンし、DIコンテナに登録するSpringDataJPAの対象インスタンスを管理する。</td>
+                    <td>必須</td>
+                </tr>
+                <tr>
+                    <td>RDSConfig</td>
+                    <td>RDSへの接続を行うクラス。コンポーネントスキャンし、DIコンテナに登録するRDS関連のインスタンスを管理する。</td>
+                    <td>必須</td>
+                </tr>
+                <tr>
+                    <td>SampleService</td>
                     <td>
-                        th:each属性はThymeLeafの繰り返し構文となる。構文は以下。<br>
-                        <ul><code>th:each="変数名, ステータス変数名 : コレクション"</code></ul>
-                        上記のコードでは繰り返し構文により、<code>${users}</code>(BackendForFrontendControllerクラスから渡されたmodel)
-                        のエンティティ数分だけ、テーブルタグ内のtdタグを繰り返す処理となっている。なお、ステータス変数は、ThymeLeafが独自に持っているステータス情報で、
-                        ${status.count}は現在の番号(繰り返しが何回目かの番号)を表示する。
+                        Repositoryの実装クラス。トランザクション境界を設定する。トランザクション境界は原則、業務ロジックを記述するサービス上で宣言する。
+                        トランザクション管理は業務ロジックによるデータ更新処理の一貫性を担保する目的に実装することが主であるため。
+                        サービスの中でも、インターフェース自体に宣言するのではなく、インターフェースを実装したクラスやクラスのメソッドに対して行う。
+                        業務ロジックごとにトランザクション管理を行う目的。トランザクション境界は<code>@Transactional</code>を付与することで宣言する。
                     </td>
+                    <td>任意</td>
+                </tr>
+                <tr>
+                    <td>Xxxxx(Entity)</td>
+                    <td>データベースに定義したテーブルに対応するエンティティクラス</td>
+                    <td>必須</td>
+                </tr>
+                <tr>
+                    <td>XxxxxRepository</td>
+                    <td>エンティティごとに、データアクセス方法を定義したリポジトリを作成する。</td>
+                    <td>必須</td>
                 </tr>
             </table>
-            </ol>
         </p>
-        <h1 id="6">6.Dockerコンテナ作成/DockerHubへのプッシュ</h1>
         <p>
-            前項までで実装したアプリをDockerコンテナ化し、DockerHubへプッシュする。
+            実装手順は以下の通り。
             <ol>
-                <li>Dockerファイルの作成</li>
-                <p>
-                    backendプロジェクトとbackend-for-frontendプロジェクトそれぞれについて、Dockerファイルを作成する。<br>
-                </p>
-                    [backendプロジェクトDockerファイル]
-                    <br>
-                    <pre><code>
-        # Dockerfile for sample service using embedded tomcat server
-        FROM centos:centos7
-        MAINTAINER yushin1402
-        
-        RUN yum install -y \
-            java-1.8.0-openjdk \
-            java-1.8.0-openjdk-devel \
-            wget tar iproute git
-        
-        RUN wget http://repos.fedorapeople.org/repos/dchen/apache-maven/epel-apache-maven.repo -O /etc/yum.repos.d/epel-apache-maven.repo
-        RUN sed -i s/\$releasever/6/g /etc/yum.repos.d/epel-apache-maven.repo
-        RUN yum install -y apache-maven
-        ENV JAVA_HOME /etc/alternatives/jre
-        RUN git clone https://github.com/yushin1402/aws-cloudnative-webapp.git /usr/local/aws-cloudnative-webapp
-        RUN mvn install -f /usr/local/aws-cloudnative-webapp/pom.xml
-        RUN cp /etc/localtime /etc/localtime.org
-        RUN ln -sf  /usr/share/zoneinfo/Asia/Tokyo /etc/localtime
-        EXPOSE 8080
-
-        CMD java -jar -Dspring.profiles.active=production /usr/local/aws-cloudnative-webapp/backend/target/aws-cloudnative-webapp-backend-0.0.1-SNAPSHOT.jar
-                    
-                    </code></pre>
-                    [backend-for-frontendプロジェクトDockerファイル]                    
-                    <pre><code>
-        # Dockerfile for sample service using embedded tomcat server
-
-        FROM centos:centos7
-        MAINTAINER debugroom
-        
-        RUN yum install -y \
-               java-1.8.0-openjdk \
-               java-1.8.0-openjdk-devel \
-               wget tar iproute git
-        
-        RUN wget http://repos.fedorapeople.org/repos/dchen/apache-maven/epel-apache-maven.repo -O /etc/yum.repos.d/epel-apache-maven.repo
-        RUN sed -i s/\$releasever/6/g /etc/yum.repos.d/epel-apache-maven.repo
-        RUN yum install -y apache-maven
-        ENV JAVA_HOME /etc/alternatives/jre
-        RUN git clone https://github.com/yushin1402/aws-cloudnative-webapp.git /usr/local/aws-cloudnative-webapp
-        RUN mvn install -f /usr/local/aws-cloudnative-webapp/pom.xml
-        
-        RUN cp /etc/localtime /etc/localtime.org
-        
-        RUN ln -sf  /usr/share/zoneinfo/Asia/Tokyo /etc/localtime
-        
-        EXPOSE 8080
-        
-        CMD java -jar -Dspring.profiles.active=production /usr/local/aws-cloudnative-webapp/backend-for-frontend/target/aws-cloudnative-webapp-backend-for-frontend-0.0.1-SNAPSHOT.jar
-                    </code></pre>
-                    <p>
-                        (※)Dockerコマンドの詳細は以下ページを参照
-                        <br>
-                        <a href src="https://qiita.com/FumiyaShibusawa/items/a0be39d28139a044157d">https://qiita.com/FumiyaShibusawa/items/a0be39d28139a044157d</a>
-                    </p>
-                    <table class="table">
-                        <tr>
-                            <th>ポイント</th>
-                            <th>説明</th>
-                        </tr>
-                        <tr>
-                            <td>ビルド処理概要</td>
-                            <td>
-                                <ol>
-                                    <li>openJDKインストール</li>
-                                    <li>Mavenパッケージダウンロード</li>
-                                    <li>Mavenパッケージのバージョン変更(6に指定)</li>
-                                    <li>Mavenインストール</li>
-                                    <li>JAVA_HOME設定</li>
-                                    <li>GitHubからプロジェクトをクローン</li>
-                                    <li>Mavenビルド</li>
-                                    <li>タイムゾーン設定ファイルバックアップ</li>
-                                    <li>タイムゾーンを日本時間に変更</li>
-                                    <li>コンテナリッスンポートを8080に設定</li>
-                                    <li>ビルドしたMavenプロジェクトを実行</li>
-                                </ol>
-                            </td>
-                        </tr>
-                    </table>
-                <li>GitHubへのプッシュ</li>
-                <p>backendプロジェクトとbackend-for-frontendプロジェクトをGitHubにプッシュする。</p>
-                <li>Dockerイメージ作成</li>
-                <p>
-                    Dockerインストール環境でDockerイメージを作成する。今回はVirtualBox上のCentOS7でDockerイメージを作成。(Dockerインストール作業の記載は割愛)
+                <li>RDS接続に利用する認証キーの配置</li>
+                作成済みの認証キーを配置する。今回は、EC2上にSpringBootアプリケーションをデプロイし、RDSアクセスさせる構成とするため、EC2に配置する。
+                その前にセッションマネージャでSCP転送で認証キーをEC2に転送するために、以下の設定を行った。
+                <ul>
                     <ol>
-                        <li>以下コマンドでCentOS上にGitをインストール</li>
-                        <code>sudo yum -y install wget make gcc perl-ExtUtils-MakeMaker curl-devel expat-devel gettext-devel openssl-devel zlib-devel autoconf</code><br>
-                        <code>sudo wget https://www.kernel.org/pub/software/scm/git/git-2.9.5.tar.gz --no-check-certificate</code><br>
-                        <code>sudo tar xvzf git-2.9.5.tar.gz</code><br>
-                        <code>cd git-2.9.5</code><br>
-                        <code>sudo make configure</code><br>
-                        <code>sudo ./configure --prefix=/usr</code><br>
-                        <code>sudo make install</code><br>
-                        <code>git --version</code><br>
-                        (※)最後にgitのバージョンが出力されていればOK<br>
-                        (※)<code>sudo ./configure --prefix=/usr</code>については以下ページを参照。インストールディレクトリをmakeのコンフィグに定義しているらしい。(/usrは非推奨と書いてあるが。。。)<br>
-                        <a href src="https://atmarkit.itmedia.co.jp/ait/articles/1107/01/news139.html">https://atmarkit.itmedia.co.jp/ait/articles/1107/01/news139.html</a>                        
-                        <li>以下コマンドでGitHub上のプロジェクト取得</li> 
-                        <code>sudo git clone https://github.com/yushin1402/aws-cloudnative-webapp.git</code><br>
-                        <code>cd aws-cloudnative-webapp</code>
-                        <li>以下コマンドでDOckerイメージを作成</li>
-                        <code>docker build backend/ -t yushin1402/aws-cloudnative-webapp-backend:latests</code><br>
-                        <code>docker build backend-for-frontend/ -t yushin1402/aws-cloudnative-webapp-backend-for-frontend:latests</code>
+                        <li>AWS CLI 1.16.12以降をインストールする。今回はWindows端末上にインストールした。コマンドは以下。</li>
+                           <code>msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi</code>
+                        <li>表示されるウィザードに従ってインストールする。</li>
+                        <li>以下コマンドで正しくインストールされたことを確認する。</li>
+                        <code>aws --version</code>
+                        <li>SessionManagerプラグインをダウンロードする。コマンドは以下。</li>
+                        <code>curl -OL https://s3.amazonaws.com/session-manager-downloads/plugin/latest/windows/SessionManagerPluginSetup.exe</code>
+                        <li>ダウンロードしたexeファイルを実行し、インストールする。</li>
+                        <li>以下のコマンドを実行して、SessionManagerプラグインのインストールが成功したことを確認する。</li>
+                        <code>session-manager-plugin.exeが「C:\Program Files\Amazon\SessionManagerPlugin\bin」にインストールされていることを確認する。</code>
+                        <li>環境変数に設定から「C:\Program Files\Amazon\SessionManagerPlugin\bin」にパスを通す。</li>
+                        <li>以下コマンドを実行し、SessionManagerプラグインのコマンドが動作することを確認する。</li>
+                        <code>session-manager-plugin</code>
+                        <br>[出力]<br>
+                        The Session Manager plugin was installed successfully. Use the AWS CLI to start a session.
+                        <li>以下コマンドでAWS CLIで利用するIAMユーザのアクセスキーなどを設定する。</li>
+                        <code>aws configure</code>
+                        <br>[出力]<br>
+                        <pre><code>
+        C:\Users\user>aws configure
+        AWS Access Key ID [None]: XXXXXXXXXXXXXXXXXXX
+        AWS Secret Access Key [None]: XXXXXXXXXXXXXXXXX
+        Default region name [None]: # ap-northeast-1
+        Default output format [None]: json
+                        </code></pre>
+                        <li>EC2インスタンスにIAMユーザでssh接続することを許可するIAMポリシーを作成する。(SSMFullAccessをアタッチ済みの場合は不要)</li>
+                        <pre><code>
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": "ssm:StartSession",
+                    "Resource": [
+                        "arn:aws:ec2:*:*:instance/instance-id",
+                        "arn:aws:ssm:*:*:document/AWS-StartSSHSession"
+                    ]
+                }
+            ]
+        }
+                        </code></pre>
+                        <li>作成したポリシーをログインに利用するユーザにアタッチする。(SSMFullAccessをアタッチ済みの場合は不要)</li>
+                        <li>NATゲートウェイをパブリックサブネット上で起動し、接続先EC2が属するプライベートサブネットのデフォルトゲートウェイに設定する。</li>
+                        <li>C:\Users\[ユーザ名]\.ssh\configに以下を追記する。(sshの接続先ホストが「i-XXXX」の際にセッションマネージャをプロキシする設定)</li>
+                        <pre><code>
+    # SSH over Session Manager
+    host i-* mi-*
+        ProxyCommand C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe "aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p"
+                        </code></pre>
+                        <li>以下コマンドでSSHする。</li>
+                        <code>ssh -i 秘密鍵パス ec2-user@[インスタンスID]</code>
+                        <li>WinSCPやテラタームを利用したい場合は、ポートフォワードによりロ-カルルポート(以下は6022)を開け、接続先EC2の22ポートとセッションを張った状態で、ローカルの6022にアクセスする。</li>
+                        <code>aws ssm start-session --target [インスタンスID] --document-name AWS-StartPortForwardingSession --parameters "portNumber=22,localPortNumber=6022"</code>
                         <br>
-                        (2021/12/01 コメント①)<br>
-                        以下のエラー出力によりDockerビルドエラーとなった。<br>
-                        <code>Fatal error compiling: invalid target release: 11</code><br>
-                        <ul>
-                        MavenプロジェクトをJava11で作成していたのに対して、DockerfileではJava1.8を指定していたことが原因。以下の通り対応した。
+                        (2021/12/07 コメント)<br>
+                        テラタームでログインしても認証に失敗する。IAMポリシーの設定を疑い、AWS-StartSSHSessionリソースへのアクション許可を与えても解決しない。<br>
+                        問題切り分けのために、コマンドプロンプトからsshでアクセスしたところ、以下のエラー出力あり。<br>
+                        <pre><code>
+        C:\Users\user>ssh -i C:\study\AWS\XXXXXXXX.pem XXXX_user@i-XXXXXXXX
+        The authenticity of host 'i-XXXXXXXXXXXXXXX (<no hostip for proxy command>)' can't be established.
+        ECDSA key fingerprint is SHA256:XXXXXXXXXXXXXXXXXXXXXXXXX.
+        Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+        Warning: Permanently added 'i-0965e86834ec8097d' (ECDSA) to the list of known hosts.
+        @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+        @         WARNING: UNPROTECTED PRIVATE KEY FILE!          @
+        @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+        Permissions for 'C:\\study\\AWS\\MA-saitoumsv-keypair.pem' are too open.
+        It is required that your private key files are NOT accessible by others.
+        This private key will be ignored.
+        Load key "C:\\study\\AWS\\XXXXXXXXXXXXXXXXXX.pem": bad permissions
+        ma_app_user@i-XXXXXXXXXXXXXXXX: Permission denied (publickey,gssapi-keyex,gssapi-with-mic).
+                        </code></pre>
+                        <br>
+                        秘密鍵ファイルの配置フォルダの権限が緩く、WindowsかAWSかどちらかで拒否されている。秘密鍵ファイルへのアクセス権限を以下手順で上記エラーは解消。
                         <ol>
-                            <li>pom.xmlの修正</li>
-                            SpringBootの利用JavaとMavenビルドの利用Javaを1.8に修正した。
-                            <br>
-                            [SpringBootの利用Java(修正)]
-                            <br>
+                            <li>秘密鍵ファイルを右クリックしてプロパティを選択</li>
+                            <li>セキュリティタブから詳細設定を選択</li>
+                            <li>継承の無効化をクリック</li>
+                            <li>編集から全てのユーザ/グループを削除</li>
+                            <li>現在のユーザを追加(コマンドプロンプトで表示されているユーザ名でOK)</li>
+                            <li>追加したユーザにフルコントロールを付与する</li>
+                        </ol>
+                        (2021/12/7 コメント2)<br>
+                        EC2インスタンスに鍵ペアの設定をしていなかったため、PermissionDiniedとなっていた。後から鍵ペアをEC2インスタンスに設定(公開鍵を配備)する手順は以下。
+                        以下を実施したところ、セッションマネージャを利用したSSHログインを実施できるようになった。
+                        <ol>
+                            <li>秘密鍵を利用して、公開鍵を生成する。(秘密鍵はEC2サービスのキーペアメニューで生成)</li>
+                            <code>ssh-keygen -y -f XXXX-keipair.pem</code>
+                            <li>EC2インスタンスを停止する。</li>
+                            <li>アクション→インスタンスの設定→ユーザデータの編集とすすむ。</li>
+                            <li>以下内容をユーザデータの編集ボックスに入力する。</li>
                             <pre><code>
-    	&lt;properties&gt;
-    		&lt;java.version&gt;1.8&lt;/java.version&gt;
-    	&lt;/properties&gt;
+        Content-Type: multipart/mixed; boundary="//"
+        MIME-Version: 1.0
+        
+        --//
+        Content-Type: text/cloud-config; charset="us-ascii"
+        MIME-Version: 1.0
+        Content-Transfer-Encoding: 7bit
+        Content-Disposition: attachment; filename="cloud-config.txt"
+        
+        #cloud-config
+        cloud_final_modules:
+        - [users-groups, once]
+        users:
+          - name: ec2-user
+            ssh-authorized-keys: 
+            - [ssh-keygenで取得した公開鍵情報、ssh-rsa含めてコピペ]
                             </code></pre>
-                            <br>
-                            [Mavenビルドの利用Java(追記)]
-                            <br>
-                            <pre><code>
-        &lt;plugin&gt;
-        	&lt;groupId&gt;org.apache.maven.plugins&lt;/groupId&gt;
-        	&lt;artifactId&gt;maven-compiler-plugin&lt;/artifactId&gt;
-        	&lt;configuration&gt;
-        		&lt;source&gt;1.8&lt;/source&gt;
-        		&lt;target&gt;1.8&lt;/target&gt;
-        	&lt;/configuration&gt;
-        &lt;/plugin&gt;
-                            </code></pre>
-                            <li>Dockerイメージの削除</li>
-                            作成済みのDockerイメージにキャッシュが残っているため、以下コマンドで削除した。<br>
-                            <code>docker rmi -f [イメージID]</code><br>
-                            ※Dockerイメージはレイヤ管理されており、再作成すると差分のみ吸収される仕組みのため、
-                              pom.xmlだけ修正しても生成済みのmavenプラグインのキャッシュは削除されない。<br>
-                              (2021/12/01 コメント②)<br>
-                              コメント①解決後、別のエラーが発生。<br>
-                              <pre><code>
-        [ERROR] com.example.backend.BackendApplicationTests  Time elapsed: 1.005 s  <<< ERROR!
-        java.lang.IllegalStateException: Unable to find a @SpringBootConfiguration, you need to use @ContextConfiguration or @SpringBootTest(classes=...) with your test
-                              </code></pre>
-                              <br>
-                              Mavenビルド時に自動でテストコードが実行されるが、その際に<code>@SpringBootConfiguration</code>が記載されたコードを発見できず、起動クラスを特定できないエラーとなっている。
-                              原因は、起動クラスをデフォルトのcom.eample.backend配下ではなく、com.example.backend.configに移動したこと。
-                              この際、src/test/java配下のBackendApplicationTestsも併せて、src/main/javaと構成をそろえて、com.example.backend.configに移動する必要があった。
-                              なお、Dockerビルド時にエラーが発生すると大幅な時間ロスとなるため、STS上で先にビルドテストをするべきだった。mavenビルドを選択し、Goalに「package」と設定して実行すると
-                              jarパッケージのビルドをテスト出来る。
-                            </ul>
-                            </ol>
-                        <li>以下コマンドで作成したDockerイメージをDockerHubへのプッシュする。</li>
-                        <code>docker login</code><br>
-                        <code>docker push yushin1402/aws-cloudnative-webapp-backend:latests</code><br>
-                        <code>docker push yushin1402/aws-cloudnative-webapp-backend-for-frontend:latests</code>
+                            <li>保存後、インスタンスを起動する。</li>
+                            <li>セッションマネージャでログインし、/home/ec2-ser/.ssh/authorized-keysの内容が上記で生成した公開鍵情報になっていることを確認する。</li>
+                            <li>インスタンスを停止後、ユーザデータを削除する。</li>
+                        </ol>
                     </ol>
-                </p>
+                </ul>
             </ol>
-            <h1 id="7">7.ECSクラスタ作成</h1>
-            <p>
-                Dockerコンテナを稼働させるECSクラスタを作成する。
-                <ol>
-                    <li>AWS ECSサービスからクラスタメニューを選択する。</li>
-                    <li>クラスターの作成を押下する。</li>
-                    <li>クラスターテンプレートの選択で、EC2+ネットワーキングを選択する。</li>
-                    <li>クラスタの設定を行う。ポイントのみを以下に記載する。</li>
-                    <table class="table">
-                        <tr>
-                            <th>設定項目</th>
-                            <th>設定値</th>
-                        </tr> 
-                        <tr>
-                            <td>パブリックIPの自動割り当て</td>
-                            <td>クラスタにECSインスタンスを登録する際にパブリックIPが必要となるため、割り当てる。
-                                (パブリックサブネットのデフォルトゲートウェイをインターネットゲートウェイに設定していたため、自動割り当てを無効にしても接続出来る認識だったが、上手くいかず。。。)</td>
-                        </tr>
-                        <tr>
-                            <td>セキュリティグループ</td>
-                            <td><ol>
-                                <li>ECSクラスタを構成するEC2インスタンスに対するセキュリティグループに作業端末からのSSH、ALBからの通信を許可する。</li>
-                                <li>ALBとの通信には動的ポーリングを利用するため、AKBにアタッチしたSGから32768 - 61000を許可する。</li>
-                                <li>動的ポーリングを設定すると、クラスタ上のDockerコンテナに対して自動でポートを割り当て、ALBと接続するマッピング管理をECSがマネージドに行ってくれる理解。</li>
-                                (2021/12/04 コメント)<br>
-                                ECSインスタンス上のDockerコンテナの起動ポート番号が～十秒ごとにインクリメントされており、ALBがそのインクリメントを検知し、ルーティング先の
-                                ポート番号を動的に変更している様子がターゲットグループのヘルスチェック画面から分かった。(この処理にどのような意味があるかは不明。。セキュリティ対策？)
-                                <br>
-                                <img class="img-fluid" src="image/aws-alb1.png">
-                                <br>↑↑上記のヘルスチェック先ポートが～十秒おきに更新されているようが確認できた。
-                            </ol></td>
-                        </tr>
-                    </table>
-                    <li>ECSタスク定義を以下の通り行う。</li>
-                    <ul><ol>
-                        <li>ECSタスク実行用のIAMロール割り当て</li>
-                        <p>
-                            IAMサービス→ロール→ロールを作成→Elastic Container Service→ユースケースの選択→Elastic Container Serviceタスクを選択する。<br>
-                            AmazonECSTaskExecutionRolePolicyを選択し、適当なロール名を指定して完了する。<br>
-                            ロールは今後、必要に応じて追加していく方針とする。
-                        </p>
-                        <li>ECSの新しいタスク定義を作成する。起動タイプの互換性の選択はEC2を選択する。</li>
-                        <li>dockerリポジトリの設定、リソース設定、ポートマッピング設定などを行う。ポートマッピングは動的ポーリングを行うためソースを0にする。宛先はSpringの8080ポートに設定する。</li>
-                    </ol></ul>
-                    <li>ECSサービス起動を以下の通り行う。</li>
-                    <ul><ol>
-                        <li>AmazonEC2ContainerServiceRoleを付与したIAMRoleを作成する。</li>
-                        <p>
-                            IAMサービス→ロール→ロールを作成→Elastic Container Service→ユースケースの選択→Elastic Container Serviceタスクを選択する。<br>
-                            AmazonECSTaskExecutionRolePolicyを選択し、適当なロール名を指定して完了する。<br>
-                            ロールは今後、必要に応じて追加していく方針とする。
-                        </p>
-                        <li>ECSの新しいタスク定義を作成する。起動タイプの互換性の選択はEC2を選択する。</li>
-                        <li>dockerリポジトリの設定、リソース設定、ポートマッピング設定などを行う。ポートマッピングは動的ポーリングを行うためソースを0にする。宛先はSpringの8080ポートに設定する。</li>
-                        <li>ECSメニューからクラスタを押下する。</li>
-                        <li>作成したクラスタを指定する。</li>
-                        <li>サービスタグの作成を押下する。</li>
-                        <li>以下の通り設定する。</li>
-                        <ul><ol type="a">
-                            <li>起動タイプはEC2とする。</li>
-                            <li>タスク定義は先ほど作成したもの</li>
-                            <li>クラスタも先ほど作成したもの</li>
-                            <li>サービス名は任意</li>
-                            <li>サービスタイプはDAEMON(クラスタのインスタンス数に応じてコンテナが自動増減する。REPLICAは指定したタスクの数で固定数のコンテナ起動</li>
-                            <li>タスクの数はコンテナの数を意味する。検証目的のため、1にする</li>
-                        </ol></ul>
-                    </ol></ul>
-                    <li>起動後の確認を以下の通り行った。</li>
-                    <ul><ol>
-                        <li>ECSサービスの画面で、ECSが起動状態になっていること。</li>
-                        <li>ECSインスタンスにログインし、環境上で挙動を確認した。</li>
-                        <br>
-                        [Dockerプロセス確認]
-                        <br>
-                        <pre><code>
-            [root@ip-10-2-9-206 ecs]# docker ps
-            CONTAINER ID   IMAGE                                                    COMMAND                  CREATED          STATUS                 PORTS                                         NAMES
-            d4888957c145   yushin1402/aws-cloudnative-webapp-backend-for-frontend   "/bin/sh -c 'java -j…"   48 minutes ago   Up 48 minutes          0.0.0.0:49425->8080/tcp, :::49425->8080/tcp   ecs-MA-saitoumsv-ecstask-public-5-aws-cloudnative-webapp-bff-c2e987d8b2bcd8c1d301
-                        </code></pre>
-                        <br><br>
-                        [コンテナログ]
-                        <br>
-                        <code><pre>
-            [root@ip-10-2-9-206 ecs]# docker logs d4888957c145
-            .   ____          _            __ _ _
-           /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
-          ( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
-           \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
-            '  |____| .__|_| |_|_| |_\__, | / / / /
-           =========|_|==============|___/=/_/_/_/
-           :: Spring Boot ::                (v2.6.0)
-          
-          2021-12-04 22:55:30.130  INFO 1 --- [           main] c.e.b.c.BackendForFrontendApplication    : Starting BackendForFrontendApplication v0.0.1-SNAPSHOT using Java 1.8.0_312 on d4888957c145 with PID 1 (/usr/local/aws-cloudnative-webapp/backend-for-frontend/target/backend-for-frontend-0.0.1-SNAPSHOT.jar started by root in /)
-          2021-12-04 22:55:30.133  INFO 1 --- [           main] c.e.b.c.BackendForFrontendApplication    : The following profiles are active: production
-          2021-12-04 22:55:32.498  INFO 1 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port(s): 8080 (http)
-          2021-12-04 22:55:32.512  INFO 1 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
-          2021-12-04 22:55:32.512  INFO 1 --- [           main] org.apache.catalina.core.StandardEngine  : Starting Servlet engine: [Apache Tomcat/9.0.55]
-          2021-12-04 22:55:32.626  INFO 1 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
-          2021-12-04 22:55:32.626  INFO 1 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 2386 ms
-          2021-12-04 22:55:33.801  INFO 1 --- [           main] o.s.b.a.w.s.WelcomePageHandlerMapping    : Adding welcome page: class path resource [static/index.html]
-          2021-12-04 22:55:34.100  INFO 1 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port(s): 8080 (http) with context path ''
-          2021-12-04 22:55:34.111  INFO 1 --- [           main] c.e.b.c.BackendForFrontendApplication    : Started BackendForFrontendApplication in 5.111 seconds (JVM running for 6.045)
-          2021-12-04 22:55:44.488  INFO 1 --- [nio-8080-exec-2] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
-          2021-12-04 22:55:44.489  INFO 1 --- [nio-8080-exec-2] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
-          2021-12-04 22:55:44.490  INFO 1 --- [nio-8080-exec-2] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
-          2021-12-04 23:52:58.687  WARN 1 --- [io-8080-exec-10] .w.s.m.s.DefaultHandlerExceptionResolver : Resolved [org.springframework.web.HttpRequestMethodNotSupportedException: Request method 'POST' not supported]
-          2021-12-04 23:58:36.755  WARN 1 --- [nio-8080-exec-5] .w.s.m.s.DefaultHandlerExceptionResolver : Resolved [org.springframework.web.HttpRequestMethodNotSupportedException: Request method 'POST' not supported]
-                        </pre></code>
-                        <br><br>
-                        [ECSエージェントログ]
-                        <br>
-                        <code>/var/log/ecs/ecs-agent.log</code>にECSエージェントによるコンテナ起動ログが出力されている。ここを見るとDockerPullに失敗した、Dockerイメージからの起動に失敗した、そもそもECSインスタンスをクラスタに登録できていないなどのエラー原因の切り分けが出来る。
-                        <br><br>
-                        [ECSエージェント初期化ログ(あまり情報はないが、エージェントログに何もエラーがなかったら、初期化に失敗しているかも？)]
-                        <br>
-                        <pre><code>
-        2021-12-04T10:56:51Z [INFO] pre-start
-        2021-12-04T10:56:52Z [INFO] start
-        2021-12-04T10:56:52Z [INFO] No existing agent container to remove.
-        2021-12-04T10:56:52Z [INFO] Starting Amazon Elastic Container Service Agent
-                        </code></pre>
-                    </ol></ul>
-                </ol>
-            </p>
         </p>
+
     </div>
 </body>
 </html>
